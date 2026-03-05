@@ -74,4 +74,15 @@ export const analyticsAPI = {
   getPerformance: (days) => api.get('/analytics/performance', { params: { days } }),
 };
 
+// Subscription API
+export const subscriptionAPI = {
+  getPlans: () => api.get('/plans'),
+  getSubscription: () => api.get('/subscription'),
+  createCheckout: (planId) => api.post('/checkout', { 
+    plan_id: planId, 
+    origin_url: window.location.origin 
+  }),
+  getCheckoutStatus: (sessionId) => api.get(`/checkout/status/${sessionId}`),
+};
+
 export default api;

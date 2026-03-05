@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/context/AuthContext';
+import BillingSection from '@/components/BillingSection';
 import {
   User,
   Bell,
@@ -14,7 +15,7 @@ import {
   Palette,
   Mail,
   Phone,
-  MapPin,
+  CreditCard,
   Save,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -61,10 +62,14 @@ export const SettingsPage = () => {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:grid-cols-4 lg:inline-grid">
+        <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:grid-cols-5 lg:inline-grid">
           <TabsTrigger value="profile" className="gap-2" data-testid="profile-tab">
             <User className="h-4 w-4 hidden sm:block" />
             Profile
+          </TabsTrigger>
+          <TabsTrigger value="billing" className="gap-2" data-testid="billing-tab">
+            <CreditCard className="h-4 w-4 hidden sm:block" />
+            Billing
           </TabsTrigger>
           <TabsTrigger value="notifications" className="gap-2" data-testid="notifications-tab">
             <Bell className="h-4 w-4 hidden sm:block" />
@@ -160,6 +165,11 @@ export const SettingsPage = () => {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Billing Tab */}
+        <TabsContent value="billing">
+          <BillingSection />
         </TabsContent>
 
         {/* Notifications Tab */}

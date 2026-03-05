@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -7,12 +7,13 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional
+from typing import List, Optional, Dict
 import uuid
 from datetime import datetime, timezone, timedelta
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 import httpx
+from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -29,6 +30,17 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
 # Weather API
 OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY', '')
+
+# Stripe API
+STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY', '')
+
+# Subscription Plans (prices in USD)
+SUBSCRIPTION_PLANS = {
+    "free": {"name": "Free", "price": 0.0, "users": 1, "tasks": 10, "features": ["basic_tasks"]},
+    "starter": {"name": "Starter", "price": 29.0, "users": 5, "tasks": -1, "features": ["basic_tasks", "inventory", "calendar"]},
+    "pro": {"name": "Pro", "price": 79.0, "users": 20, "tasks": -1, "features": ["basic_tasks", "inventory", "calendar", "maps", "analytics", "reports"]},
+    "enterprise": {"name": "Enterprise", "price": 199.0, "users": -1, "tasks": -1, "features": ["basic_tasks", "inventory", "calendar", "maps", "analytics", "reports", "sms", "email", "priority_support"]},
+}
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -164,6 +176,20 @@ class TeamMemberUpdate(BaseModel):
     status: Optional[str] = None  # available, busy, offline
     phone: Optional[str] = None
     name: Optional[str] = None
+
+# Subscription Models
+class CheckoutRequest(BaseModel):
+    plan_id: str
+    origin_url: str
+
+class SubscriptionResponse(BaseModel):
+    plan_id: str
+    plan_name: str
+    status: str
+    max_users: int
+    max_tasks: int
+    features: List[str]
+    expires_at: Optional[datetime] = None
 
 # ==================== AUTH HELPERS ====================
 
@@ -815,6 +841,238 @@ async def get_performance_data(
 @api_router.get("/")
 async def root():
     return {"message": "FieldOps Pro API", "version": "1.0.0"}
+
+# ==================== SUBSCRIPTION & PAYMENT ROUTES ====================
+
+@api_router.get("/plans")
+async def get_plans():
+    """Get all available subscription plans"""
+    return {"plans": SUBSCRIPTION_PLANS}
+
+@api_router.get("/subscription", response_model=SubscriptionResponse)
+async def get_subscription(current_user: dict = Depends(get_current_user)):
+    """Get current user's subscription"""
+    subscription = await db.subscriptions.find_one({"user_id": current_user["id"]}, {"_id": 0})
+    
+    if not subscription:
+        # Return free plan by default
+        return SubscriptionResponse(
+            plan_id="free",
+            plan_name="Free",
+            status="active",
+            max_users=1,
+            max_tasks=10,
+            features=["basic_tasks"]
+        )
+    
+    plan = SUBSCRIPTION_PLANS.get(subscription["plan_id"], SUBSCRIPTION_PLANS["free"])
+    expires_at = subscription.get("expires_at")
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    
+    return SubscriptionResponse(
+        plan_id=subscription["plan_id"],
+        plan_name=plan["name"],
+        status=subscription["status"],
+        max_users=plan["users"],
+        max_tasks=plan["tasks"],
+        features=plan["features"],
+        expires_at=expires_at
+    )
+
+@api_router.post("/checkout")
+async def create_checkout(request: Request, checkout_data: CheckoutRequest, current_user: dict = Depends(get_current_user)):
+    """Create a Stripe checkout session for subscription"""
+    plan_id = checkout_data.plan_id
+    origin_url = checkout_data.origin_url
+    
+    if plan_id not in SUBSCRIPTION_PLANS:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    
+    plan = SUBSCRIPTION_PLANS[plan_id]
+    
+    if plan["price"] == 0:
+        raise HTTPException(status_code=400, detail="Free plan doesn't require payment")
+    
+    # Initialize Stripe
+    host_url = str(request.base_url).rstrip("/")
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    
+    # Create success and cancel URLs
+    success_url = f"{origin_url}/settings?session_id={{CHECKOUT_SESSION_ID}}&success=true"
+    cancel_url = f"{origin_url}/settings?cancelled=true"
+    
+    # Create checkout session
+    checkout_request = CheckoutSessionRequest(
+        amount=float(plan["price"]),
+        currency="usd",
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={
+            "user_id": current_user["id"],
+            "user_email": current_user["email"],
+            "plan_id": plan_id,
+            "plan_name": plan["name"]
+        }
+    )
+    
+    try:
+        session: CheckoutSessionResponse = await stripe_checkout.create_checkout_session(checkout_request)
+        
+        # Create payment transaction record
+        transaction_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc)
+        
+        transaction_doc = {
+            "id": transaction_id,
+            "session_id": session.session_id,
+            "user_id": current_user["id"],
+            "user_email": current_user["email"],
+            "plan_id": plan_id,
+            "amount": plan["price"],
+            "currency": "usd",
+            "payment_status": "pending",
+            "status": "initiated",
+            "created_at": now.isoformat(),
+            "updated_at": now.isoformat()
+        }
+        
+        await db.payment_transactions.insert_one(transaction_doc)
+        
+        return {
+            "checkout_url": session.url,
+            "session_id": session.session_id
+        }
+    except Exception as e:
+        logger.error(f"Stripe checkout error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create checkout session")
+
+@api_router.get("/checkout/status/{session_id}")
+async def get_checkout_status(session_id: str, request: Request, current_user: dict = Depends(get_current_user)):
+    """Get the status of a checkout session and update subscription if paid"""
+    # Check if already processed
+    transaction = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    if transaction["payment_status"] == "paid":
+        return {
+            "status": "complete",
+            "payment_status": "paid",
+            "plan_id": transaction["plan_id"],
+            "message": "Subscription already activated"
+        }
+    
+    # Initialize Stripe
+    host_url = str(request.base_url).rstrip("/")
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    
+    try:
+        status: CheckoutStatusResponse = await stripe_checkout.get_checkout_status(session_id)
+        
+        now = datetime.now(timezone.utc)
+        
+        # Update transaction status
+        await db.payment_transactions.update_one(
+            {"session_id": session_id},
+            {"$set": {
+                "payment_status": status.payment_status,
+                "status": status.status,
+                "updated_at": now.isoformat()
+            }}
+        )
+        
+        # If payment successful, activate subscription
+        if status.payment_status == "paid":
+            plan_id = transaction["plan_id"]
+            expires_at = now + timedelta(days=30)  # Monthly subscription
+            
+            # Update or create subscription
+            await db.subscriptions.update_one(
+                {"user_id": transaction["user_id"]},
+                {"$set": {
+                    "user_id": transaction["user_id"],
+                    "plan_id": plan_id,
+                    "status": "active",
+                    "activated_at": now.isoformat(),
+                    "expires_at": expires_at.isoformat(),
+                    "updated_at": now.isoformat()
+                }},
+                upsert=True
+            )
+            
+            return {
+                "status": "complete",
+                "payment_status": "paid",
+                "plan_id": plan_id,
+                "message": "Subscription activated successfully"
+            }
+        
+        return {
+            "status": status.status,
+            "payment_status": status.payment_status,
+            "plan_id": transaction["plan_id"]
+        }
+    except Exception as e:
+        logger.error(f"Error checking checkout status: {e}")
+        raise HTTPException(status_code=500, detail="Failed to check payment status")
+
+@api_router.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhooks"""
+    try:
+        body = await request.body()
+        signature = request.headers.get("Stripe-Signature")
+        
+        host_url = str(request.base_url).rstrip("/")
+        webhook_url = f"{host_url}/api/webhook/stripe"
+        stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+        
+        webhook_response = await stripe_checkout.handle_webhook(body, signature)
+        
+        if webhook_response.payment_status == "paid":
+            session_id = webhook_response.session_id
+            metadata = webhook_response.metadata
+            
+            now = datetime.now(timezone.utc)
+            
+            # Update transaction
+            await db.payment_transactions.update_one(
+                {"session_id": session_id},
+                {"$set": {
+                    "payment_status": "paid",
+                    "status": "complete",
+                    "updated_at": now.isoformat()
+                }}
+            )
+            
+            # Activate subscription
+            user_id = metadata.get("user_id")
+            plan_id = metadata.get("plan_id")
+            
+            if user_id and plan_id:
+                expires_at = now + timedelta(days=30)
+                
+                await db.subscriptions.update_one(
+                    {"user_id": user_id},
+                    {"$set": {
+                        "user_id": user_id,
+                        "plan_id": plan_id,
+                        "status": "active",
+                        "activated_at": now.isoformat(),
+                        "expires_at": expires_at.isoformat(),
+                        "updated_at": now.isoformat()
+                    }},
+                    upsert=True
+                )
+        
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return {"status": "error", "message": str(e)}
 
 # Include router
 app.include_router(api_router)
