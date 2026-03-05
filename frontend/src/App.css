@@ -1,34 +1,104 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* App-specific styles */
+.app-container {
+    @apply flex h-screen overflow-hidden bg-slate-50;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+.main-content {
+    @apply flex-1 overflow-auto;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+/* Dashboard card grid */
+.dashboard-grid {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6;
 }
 
-.App-link {
-    color: #61dafb;
+/* Stat card */
+.stat-card {
+    @apply bg-white rounded-lg border border-slate-200 p-6 hover:shadow-md transition-shadow;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+/* Map container */
+.map-container {
+    @apply h-[calc(100vh-12rem)] rounded-lg overflow-hidden border border-slate-200;
+}
+
+/* Table styles */
+.data-table {
+    @apply w-full;
+}
+
+.data-table th {
+    @apply text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4 bg-slate-50 border-b border-slate-200;
+}
+
+.data-table td {
+    @apply py-4 px-4 border-b border-slate-100;
+}
+
+.data-table tr:hover {
+    @apply bg-slate-50;
+}
+
+/* Badge variations */
+.badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+/* Weather widget */
+.weather-widget {
+    @apply bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-6 text-white;
+}
+
+/* Task card */
+.task-card {
+    @apply bg-white rounded-lg border border-slate-200 p-4 hover:shadow-md transition-all cursor-pointer;
+}
+
+.task-card:hover {
+    @apply border-blue-300;
+}
+
+/* Form styles */
+.form-group {
+    @apply space-y-2;
+}
+
+.form-label {
+    @apply text-sm font-medium text-slate-700;
+}
+
+/* Loading spinner */
+.spinner {
+    @apply animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full;
+}
+
+/* Empty state */
+.empty-state {
+    @apply flex flex-col items-center justify-center py-12 text-center;
+}
+
+/* Calendar container */
+.calendar-container {
+    @apply bg-white rounded-lg border border-slate-200 p-4;
+    min-height: 600px;
+}
+
+/* Inventory item */
+.inventory-item {
+    @apply flex items-center justify-between p-4 bg-white rounded-lg border border-slate-200 hover:border-blue-300 transition-colors;
+}
+
+/* Team member card */
+.team-member-card {
+    @apply flex items-center gap-4 p-4 bg-white rounded-lg border border-slate-200 hover:shadow-md transition-all;
+}
+
+/* Notification badge */
+.notification-badge {
+    @apply absolute -top-1 -right-1 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center;
+}
+
+/* Quick action button */
+.quick-action {
+    @apply flex items-center gap-2 px-4 py-3 bg-white rounded-lg border border-slate-200 hover:border-blue-300 hover:bg-blue-50 transition-all cursor-pointer;
 }
