@@ -273,7 +273,7 @@ class InvoiceResponse(BaseModel):
 import resend
 
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
-APP_URL = os.environ.get('APP_URL', 'https://fieldflow-19.preview.emergentagent.com')
+APP_URL = os.environ.get('APP_URL', 'https://fieldops-deploy.preview.emergentagent.com')
 APP_NAME = os.environ.get('APP_NAME', 'FieldOps Solutions')
 
 async def send_email(to_email: str, subject: str, html_content: str):
