@@ -269,8 +269,13 @@ class InvoiceResponse(BaseModel):
     payment_link: Optional[str] = None
     created_at: datetime
 
-# Email notification helper
-import resend
+# Email notification helper (optional)
+try:
+    import resend
+    RESEND_AVAILABLE = True
+except ImportError:
+    RESEND_AVAILABLE = False
+    resend = None
 
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 APP_URL = os.environ.get('APP_URL', 'https://fieldops-deploy.preview.emergentagent.com')
@@ -278,8 +283,8 @@ APP_NAME = os.environ.get('APP_NAME', 'FieldOps')
 
 async def send_email(to_email: str, subject: str, html_content: str):
     """Send email using Resend"""
-    if not RESEND_API_KEY:
-        logger.warning("RESEND_API_KEY not set, skipping email")
+    if not RESEND_AVAILABLE or not RESEND_API_KEY:
+        logger.warning("Email service not configured, skipping email")
         return False
     try:
         resend.api_key = RESEND_API_KEY
