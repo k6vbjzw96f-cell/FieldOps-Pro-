@@ -1,8 +1,8 @@
-# FieldOps Pro
+# FieldOps
 
 A comprehensive field service workforce management platform for technicians, dispatchers, and administrators.
 
-![FieldOps Pro](https://img.shields.io/badge/FieldOps-Pro-2563eb?style=for-the-badge)
+![FieldOps](https://img.shields.io/badge/FieldOps-Platform-2563eb?style=for-the-badge)
 
 ## Features
 
@@ -35,8 +35,8 @@ A comprehensive field service workforce management platform for technicians, dis
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/fieldops-pro.git
-cd fieldops-pro
+git clone https://github.com/YOUR_USERNAME/fieldops.git
+cd fieldops
 ```
 
 ### 2. Backend Setup
@@ -106,7 +106,7 @@ Railway provides free MongoDB and automatic deployments.
 
 2. **Create New Project**
    - Click "New Project" → "Deploy from GitHub repo"
-   - Select your `fieldops-pro` repository
+   - Select your `fieldops` repository
 
 3. **Add MongoDB**
    - Click "New" → "Database" → "MongoDB"
@@ -238,8 +238,8 @@ systemctl start mongod && systemctl enable mongod
 
 ```bash
 cd /var/www
-git clone https://github.com/YOUR_USERNAME/fieldops-pro.git
-cd fieldops-pro
+git clone https://github.com/YOUR_USERNAME/fieldops.git
+cd fieldops
 
 # Backend
 cd backend
@@ -271,9 +271,9 @@ After=network.target
 
 [Service]
 User=root
-WorkingDirectory=/var/www/fieldops-pro/backend
-Environment="PATH=/var/www/fieldops-pro/backend/venv/bin"
-ExecStart=/var/www/fieldops-pro/backend/venv/bin/uvicorn server:app --host 0.0.0.0 --port 8001
+WorkingDirectory=/var/www/fieldops/backend
+Environment="PATH=/var/www/fieldops/backend/venv/bin"
+ExecStart=/var/www/fieldops/backend/venv/bin/uvicorn server:app --host 0.0.0.0 --port 8001
 Restart=always
 
 [Install]
@@ -295,7 +295,7 @@ server {
 
     # Frontend
     location / {
-        root /var/www/fieldops-pro/frontend/build;
+        root /var/www/fieldops/frontend/build;
         try_files \$uri \$uri/ /index.html;
     }
 

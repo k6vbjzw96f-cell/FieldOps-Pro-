@@ -338,7 +338,7 @@ export const SettingsPage = () => {
           <Card>
             <CardHeader>
               <CardTitle className="font-[Manrope]">Appearance</CardTitle>
-              <CardDescription>Customize how FieldOps Pro looks</CardDescription>
+              <CardDescription>Customize how FieldOps looks</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div>

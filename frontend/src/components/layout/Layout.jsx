@@ -34,7 +34,7 @@ export const Layout = () => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  const pageTitle = pageTitles[location.pathname] || 'FieldOps Pro';
+  const pageTitle = pageTitles[location.pathname] || 'FieldOps';
 
   return (
     <div className="app-container" data-testid="app-layout">
