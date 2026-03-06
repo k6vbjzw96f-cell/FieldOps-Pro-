@@ -47,7 +47,7 @@ export const Sidebar = () => {
             <Zap className="h-6 w-6 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-white font-[Manrope]">Field Force</h1>
+            <h1 className="text-lg font-bold text-white font-[Manrope]">FieldOps</h1>
             <p className="text-xs text-slate-400">Solutions</p>
           </div>
         </div>
