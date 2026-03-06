@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { Wrench, Mail, Lock, AlertCircle } from 'lucide-react';
+import { Zap, Mail, Lock, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const LoginPage = () => {
@@ -42,9 +42,9 @@ export const LoginPage = () => {
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <div className="h-14 w-14 bg-blue-600 rounded-xl flex items-center justify-center mb-4">
-            <Wrench className="h-8 w-8 text-white" />
+            <Zap className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 font-[Manrope]">FieldOps Pro</h1>
+          <h1 className="text-3xl font-bold text-slate-900 font-[Manrope]">Field Force Solutions</h1>
           <p className="text-slate-500 mt-1">Field Service Management</p>
         </div>
 

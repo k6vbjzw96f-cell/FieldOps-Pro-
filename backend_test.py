@@ -374,9 +374,289 @@ class FieldOpsAPITester:
         
         return success
 
+    def test_create_customer(self):
+        """Test customer creation"""
+        customer_data = {
+            "name": f"Test Customer {datetime.now().strftime('%H%M%S')}",
+            "email": f"customer_{datetime.now().strftime('%H%M%S')}@example.com",
+            "phone": "+1-555-1234",
+            "company": "Test Company Ltd",
+            "address": "123 Test Street, Test City, TC 12345",
+            "notes": "Test customer for API validation"
+        }
+        
+        success, response = self.run_test(
+            "Create Customer",
+            "POST",
+            "/api/customers",
+            200,
+            data=customer_data
+        )
+        
+        if success and 'id' in response:
+            self.test_data['customer_id'] = response['id']
+            print(f"   ✓ Customer ID: {self.test_data['customer_id']}")
+            print(f"   ✓ Customer Name: {response.get('name', 'N/A')}")
+        
+        return success
+
+    def test_get_customers(self):
+        """Test get all customers"""
+        success, response = self.run_test(
+            "Get Customers",
+            "GET",
+            "/api/customers",
+            200
+        )
+        
+        if success and isinstance(response, list):
+            print(f"   ✓ Found {len(response)} customers")
+        
+        return success
+
+    def test_get_customer_by_id(self):
+        """Test get specific customer"""
+        if not self.test_data.get('customer_id'):
+            print("   ⚠️  No test customer available")
+            return False
+            
+        success, response = self.run_test(
+            "Get Customer by ID",
+            "GET",
+            f"/api/customers/{self.test_data['customer_id']}",
+            200
+        )
+        
+        if success:
+            print(f"   ✓ Customer: {response.get('name', 'N/A')}")
+        
+        return success
+
+    def test_create_quote(self):
+        """Test quote creation"""
+        if not self.test_data.get('customer_id'):
+            print("   ⚠️  No test customer available for quote")
+            return False
+        
+        quote_data = {
+            "customer_id": self.test_data['customer_id'],
+            "title": f"Test Quote {datetime.now().strftime('%H%M%S')}",
+            "items": [
+                {
+                    "description": "Service Labor",
+                    "quantity": 2,
+                    "unit_price": 150.0
+                },
+                {
+                    "description": "Equipment Parts",
+                    "quantity": 1,
+                    "unit_price": 75.0
+                }
+            ],
+            "notes": "Test quote for API validation",
+            "valid_days": 30
+        }
+        
+        success, response = self.run_test(
+            "Create Quote",
+            "POST",
+            "/api/quotes",
+            200,
+            data=quote_data
+        )
+        
+        if success and 'id' in response:
+            self.test_data['quote_id'] = response['id']
+            print(f"   ✓ Quote ID: {self.test_data['quote_id']}")
+            print(f"   ✓ Quote Number: {response.get('quote_number', 'N/A')}")
+            print(f"   ✓ Total: ${response.get('total', 0):.2f}")
+            print(f"   ✓ Public Link: {response.get('public_link', 'N/A')}")
+        
+        return success
+
+    def test_get_quotes(self):
+        """Test get all quotes"""
+        success, response = self.run_test(
+            "Get Quotes",
+            "GET",
+            "/api/quotes",
+            200
+        )
+        
+        if success and isinstance(response, list):
+            print(f"   ✓ Found {len(response)} quotes")
+        
+        return success
+
+    def test_send_quote(self):
+        """Test send quote"""
+        if not self.test_data.get('quote_id'):
+            print("   ⚠️  No test quote available")
+            return False
+            
+        success, response = self.run_test(
+            "Send Quote",
+            "POST",
+            f"/api/quotes/{self.test_data['quote_id']}/send",
+            200
+        )
+        
+        if success:
+            print(f"   ✓ Quote sent successfully")
+        
+        return success
+
+    def test_create_invoice(self):
+        """Test invoice creation"""
+        if not self.test_data.get('customer_id'):
+            print("   ⚠️  No test customer available for invoice")
+            return False
+        
+        invoice_data = {
+            "customer_id": self.test_data['customer_id'],
+            "title": f"Test Invoice {datetime.now().strftime('%H%M%S')}",
+            "items": [
+                {
+                    "description": "Completed Service Work",
+                    "quantity": 3,
+                    "unit_price": 120.0
+                },
+                {
+                    "description": "Materials Used",
+                    "quantity": 1,
+                    "unit_price": 85.0
+                }
+            ],
+            "notes": "Test invoice for API validation",
+            "due_days": 14
+        }
+        
+        success, response = self.run_test(
+            "Create Invoice",
+            "POST",
+            "/api/invoices",
+            200,
+            data=invoice_data
+        )
+        
+        if success and 'id' in response:
+            self.test_data['invoice_id'] = response['id']
+            print(f"   ✓ Invoice ID: {self.test_data['invoice_id']}")
+            print(f"   ✓ Invoice Number: {response.get('invoice_number', 'N/A')}")
+            print(f"   ✓ Total: ${response.get('total', 0):.2f}")
+            print(f"   ✓ Public Link: {response.get('public_link', 'N/A')}")
+            print(f"   ✓ Payment Link: {'Yes' if response.get('payment_link') else 'No'}")
+        
+        return success
+
+    def test_get_invoices(self):
+        """Test get all invoices"""
+        success, response = self.run_test(
+            "Get Invoices",
+            "GET",
+            "/api/invoices",
+            200
+        )
+        
+        if success and isinstance(response, list):
+            print(f"   ✓ Found {len(response)} invoices")
+        
+        return success
+
+    def test_send_invoice(self):
+        """Test send invoice"""
+        if not self.test_data.get('invoice_id'):
+            print("   ⚠️  No test invoice available")
+            return False
+            
+        success, response = self.run_test(
+            "Send Invoice",
+            "POST",
+            f"/api/invoices/{self.test_data['invoice_id']}/send",
+            200
+        )
+        
+        if success:
+            print(f"   ✓ Invoice sent successfully")
+        
+        return success
+
+    def test_public_quote_portal(self):
+        """Test public quote portal (no auth needed)"""
+        if not self.test_data.get('quote_id'):
+            print("   ⚠️  No test quote available")
+            return False
+        
+        # Temporarily remove auth token for public endpoint    
+        temp_token = self.token
+        self.token = None
+        
+        success, response = self.run_test(
+            "Public Quote Portal",
+            "GET",
+            f"/api/portal/quote/{self.test_data['quote_id']}",
+            200
+        )
+        
+        # Restore token
+        self.token = temp_token
+        
+        if success:
+            print(f"   ✓ Quote Number: {response.get('quote_number', 'N/A')}")
+            print(f"   ✓ Customer: {response.get('customer_name', 'N/A')}")
+            print(f"   ✓ Total: ${response.get('total', 0):.2f}")
+        
+        return success
+
+    def test_public_invoice_portal(self):
+        """Test public invoice portal (no auth needed)"""
+        if not self.test_data.get('invoice_id'):
+            print("   ⚠️  No test invoice available")
+            return False
+        
+        # Temporarily remove auth token for public endpoint    
+        temp_token = self.token
+        self.token = None
+        
+        success, response = self.run_test(
+            "Public Invoice Portal",
+            "GET",
+            f"/api/portal/invoice/{self.test_data['invoice_id']}",
+            200
+        )
+        
+        # Restore token
+        self.token = temp_token
+        
+        if success:
+            print(f"   ✓ Invoice Number: {response.get('invoice_number', 'N/A')}")
+            print(f"   ✓ Customer: {response.get('customer_name', 'N/A')}")
+            print(f"   ✓ Total: ${response.get('total', 0):.2f}")
+            print(f"   ✓ Payment Link: {'Available' if response.get('payment_link') else 'Not Available'}")
+        
+        return success
+
     def cleanup_test_data(self):
         """Clean up test data"""
         print("\n🧹 Cleaning up test data...")
+        
+        # Delete test quote
+        if self.test_data.get('quote_id'):
+            self.run_test(
+                "Delete Test Quote",
+                "DELETE",
+                f"/api/quotes/{self.test_data['quote_id']}",
+                200
+            )
+        
+        # Delete test invoice
+        if self.test_data.get('invoice_id'):
+            self.run_test(
+                "Delete Test Invoice",
+                "DELETE",
+                f"/api/invoices/{self.test_data['invoice_id']}",
+                200
+            )
         
         # Delete test task
         if self.test_data.get('task_id'):
@@ -395,9 +675,18 @@ class FieldOpsAPITester:
                 f"/api/inventory/{self.test_data['inventory_id']}",
                 200
             )
+        
+        # Delete test customer (do this last as quotes/invoices depend on it)
+        if self.test_data.get('customer_id'):
+            self.run_test(
+                "Delete Test Customer",
+                "DELETE",
+                f"/api/customers/{self.test_data['customer_id']}",
+                200
+            )
 
 def main():
-    print("🚀 Starting FieldOps Pro API Tests...")
+    print("🚀 Starting Field Force Solutions API Tests...")
     print("=" * 60)
     
     tester = FieldOpsAPITester()
@@ -409,6 +698,17 @@ def main():
         tester.test_user_registration,
         tester.test_user_login,
         tester.test_get_user_profile,
+        tester.test_create_customer,
+        tester.test_get_customers,
+        tester.test_get_customer_by_id,
+        tester.test_create_quote,
+        tester.test_get_quotes,
+        tester.test_send_quote,
+        tester.test_create_invoice,
+        tester.test_get_invoices,
+        tester.test_send_invoice,
+        tester.test_public_quote_portal,
+        tester.test_public_invoice_portal,
         tester.test_create_task,
         tester.test_get_tasks,
         tester.test_get_task_by_id,

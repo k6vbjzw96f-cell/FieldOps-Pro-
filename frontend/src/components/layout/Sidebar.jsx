@@ -10,12 +10,18 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  Wrench,
+  Zap,
+  UserCircle,
+  FileText,
+  Receipt,
 } from 'lucide-react';
 
 const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/tasks', icon: ClipboardList, label: 'Tasks' },
+  { path: '/customers', icon: UserCircle, label: 'Customers' },
+  { path: '/quotes', icon: FileText, label: 'Quotes' },
+  { path: '/invoices', icon: Receipt, label: 'Invoices' },
+  { path: '/tasks', icon: ClipboardList, label: 'Jobs' },
   { path: '/map', icon: Map, label: 'Map View' },
   { path: '/inventory', icon: Package, label: 'Inventory' },
   { path: '/team', icon: Users, label: 'Team' },
@@ -38,11 +44,11 @@ export const Sidebar = () => {
       <div className="p-6 border-b border-slate-800">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 bg-blue-600 rounded-lg flex items-center justify-center">
-            <Wrench className="h-6 w-6 text-white" />
+            <Zap className="h-6 w-6 text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white font-[Manrope]">FieldOps</h1>
-            <p className="text-xs text-slate-400">Pro</p>
+            <h1 className="text-lg font-bold text-white font-[Manrope]">Field Force</h1>
+            <p className="text-xs text-slate-400">Solutions</p>
           </div>
         </div>
       </div>

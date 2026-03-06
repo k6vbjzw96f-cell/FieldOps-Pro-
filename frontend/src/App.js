@@ -10,12 +10,19 @@ import Layout from "@/components/layout/Layout";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
 import DashboardPage from "@/pages/DashboardPage";
+import CustomersPage from "@/pages/CustomersPage";
+import QuotesPage from "@/pages/QuotesPage";
+import InvoicesPage from "@/pages/InvoicesPage";
 import TasksPage from "@/pages/TasksPage";
 import MapPage from "@/pages/MapPage";
 import InventoryPage from "@/pages/InventoryPage";
 import TeamPage from "@/pages/TeamPage";
 import ReportsPage from "@/pages/ReportsPage";
 import SettingsPage from "@/pages/SettingsPage";
+
+// Public Portal Pages
+import QuotePortalPage from "@/pages/QuotePortalPage";
+import InvoicePortalPage from "@/pages/InvoicePortalPage";
 
 // Public route wrapper - redirects to dashboard if authenticated
 const PublicRoute = ({ children }) => {
@@ -39,6 +46,10 @@ const PublicRoute = ({ children }) => {
 function AppRoutes() {
   return (
     <Routes>
+      {/* Public Portal Routes (no auth required) */}
+      <Route path="/portal/quote/:quoteId" element={<QuotePortalPage />} />
+      <Route path="/portal/invoice/:invoiceId" element={<InvoicePortalPage />} />
+      
       {/* Public Routes */}
       <Route
         path="/login"
@@ -60,6 +71,9 @@ function AppRoutes() {
       {/* Protected Routes */}
       <Route element={<Layout />}>
         <Route index element={<DashboardPage />} />
+        <Route path="/customers" element={<CustomersPage />} />
+        <Route path="/quotes" element={<QuotesPage />} />
+        <Route path="/invoices" element={<InvoicesPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/map" element={<MapPage />} />
         <Route path="/inventory" element={<InventoryPage />} />

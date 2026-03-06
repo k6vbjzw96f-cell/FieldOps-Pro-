@@ -85,4 +85,37 @@ export const subscriptionAPI = {
   getCheckoutStatus: (sessionId) => api.get(`/checkout/status/${sessionId}`),
 };
 
+// Customers API
+export const customersAPI = {
+  getAll: () => api.get('/customers'),
+  getOne: (id) => api.get(`/customers/${id}`),
+  create: (data) => api.post('/customers', data),
+  delete: (id) => api.delete(`/customers/${id}`),
+};
+
+// Quotes API
+export const quotesAPI = {
+  getAll: (params) => api.get('/quotes', { params }),
+  create: (data) => api.post('/quotes', data),
+  send: (id) => api.post(`/quotes/${id}/send`),
+  delete: (id) => api.delete(`/quotes/${id}`),
+};
+
+// Invoices API
+export const invoicesAPI = {
+  getAll: (params) => api.get('/invoices', { params }),
+  create: (data) => api.post('/invoices', data),
+  send: (id) => api.post(`/invoices/${id}/send`),
+  delete: (id) => api.delete(`/invoices/${id}`),
+};
+
+// Public Portal API (no auth)
+export const portalAPI = {
+  getQuote: (id) => api.get(`/portal/quote/${id}`),
+  acceptQuote: (id) => api.post(`/portal/quote/${id}/accept`),
+  declineQuote: (id) => api.post(`/portal/quote/${id}/decline`),
+  getInvoice: (id) => api.get(`/portal/invoice/${id}`),
+  getCustomerJobs: (customerId) => api.get(`/portal/customer/${customerId}/jobs`),
+};
+
 export default api;

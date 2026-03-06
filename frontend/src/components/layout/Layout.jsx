@@ -6,7 +6,10 @@ import Header from './Header';
 
 const pageTitles = {
   '/': 'Dashboard',
-  '/tasks': 'Tasks',
+  '/customers': 'Customers',
+  '/quotes': 'Quotes',
+  '/invoices': 'Invoices',
+  '/tasks': 'Jobs',
   '/map': 'Map View',
   '/inventory': 'Inventory',
   '/team': 'Team',

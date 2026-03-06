@@ -46,7 +46,7 @@ SUBSCRIPTION_PLANS = {
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
-app = FastAPI(title="FieldOps Pro API")
+app = FastAPI(title="Field Force Solutions API")
 api_router = APIRouter(prefix="/api")
 
 # Configure logging
@@ -190,6 +190,109 @@ class SubscriptionResponse(BaseModel):
     max_tasks: int
     features: List[str]
     expires_at: Optional[datetime] = None
+
+# Customer/Client Models
+class CustomerCreate(BaseModel):
+    name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    company: Optional[str] = None
+    address: Optional[str] = None
+    notes: Optional[str] = None
+
+class CustomerResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+    phone: Optional[str] = None
+    company: Optional[str] = None
+    address: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: datetime
+
+# Quote Models
+class QuoteItemCreate(BaseModel):
+    description: str
+    quantity: float = 1
+    unit_price: float
+    
+class QuoteCreate(BaseModel):
+    customer_id: str
+    title: str
+    items: List[QuoteItemCreate]
+    notes: Optional[str] = None
+    valid_days: int = 30
+    
+class QuoteResponse(BaseModel):
+    id: str
+    quote_number: str
+    customer_id: str
+    customer_name: str
+    customer_email: str
+    title: str
+    items: List[dict]
+    subtotal: float
+    tax: float
+    total: float
+    status: str  # draft, sent, accepted, declined, expired
+    notes: Optional[str] = None
+    valid_until: datetime
+    public_link: str
+    created_at: datetime
+
+# Invoice Models
+class InvoiceCreate(BaseModel):
+    customer_id: str
+    quote_id: Optional[str] = None
+    title: str
+    items: List[QuoteItemCreate]
+    notes: Optional[str] = None
+    due_days: int = 14
+
+class InvoiceResponse(BaseModel):
+    id: str
+    invoice_number: str
+    customer_id: str
+    customer_name: str
+    customer_email: str
+    quote_id: Optional[str] = None
+    title: str
+    items: List[dict]
+    subtotal: float
+    tax: float
+    total: float
+    status: str  # draft, sent, paid, overdue, cancelled
+    notes: Optional[str] = None
+    due_date: datetime
+    paid_at: Optional[datetime] = None
+    public_link: str
+    payment_link: Optional[str] = None
+    created_at: datetime
+
+# Email notification helper
+import resend
+
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
+APP_URL = os.environ.get('APP_URL', 'https://fieldflow-19.preview.emergentagent.com')
+APP_NAME = os.environ.get('APP_NAME', 'Field Force Solutions')
+
+async def send_email(to_email: str, subject: str, html_content: str):
+    """Send email using Resend"""
+    if not RESEND_API_KEY:
+        logger.warning("RESEND_API_KEY not set, skipping email")
+        return False
+    try:
+        resend.api_key = RESEND_API_KEY
+        resend.Emails.send({
+            "from": f"{APP_NAME} <onboarding@resend.dev>",
+            "to": [to_email],
+            "subject": subject,
+            "html": html_content
+        })
+        return True
+    except Exception as e:
+        logger.error(f"Email send error: {e}")
+        return False
 
 # ==================== AUTH HELPERS ====================
 
@@ -836,11 +939,495 @@ async def get_performance_data(
         "period_days": days
     }
 
+# ==================== CUSTOMER ROUTES ====================
+
+@api_router.post("/customers", response_model=CustomerResponse)
+async def create_customer(customer_data: CustomerCreate, current_user: dict = Depends(get_current_user)):
+    customer_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    
+    customer_doc = {
+        "id": customer_id,
+        "name": customer_data.name,
+        "email": customer_data.email,
+        "phone": customer_data.phone,
+        "company": customer_data.company,
+        "address": customer_data.address,
+        "notes": customer_data.notes,
+        "created_by": current_user["id"],
+        "created_at": now.isoformat(),
+    }
+    
+    await db.customers.insert_one(customer_doc)
+    
+    return CustomerResponse(
+        id=customer_id,
+        name=customer_data.name,
+        email=customer_data.email,
+        phone=customer_data.phone,
+        company=customer_data.company,
+        address=customer_data.address,
+        notes=customer_data.notes,
+        created_at=now
+    )
+
+@api_router.get("/customers", response_model=List[CustomerResponse])
+async def get_customers(current_user: dict = Depends(get_current_user)):
+    customers = await db.customers.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    
+    result = []
+    for c in customers:
+        created_at = c.get("created_at")
+        if isinstance(created_at, str):
+            created_at = datetime.fromisoformat(created_at)
+        result.append(CustomerResponse(
+            id=c["id"],
+            name=c["name"],
+            email=c["email"],
+            phone=c.get("phone"),
+            company=c.get("company"),
+            address=c.get("address"),
+            notes=c.get("notes"),
+            created_at=created_at
+        ))
+    return result
+
+@api_router.get("/customers/{customer_id}", response_model=CustomerResponse)
+async def get_customer(customer_id: str, current_user: dict = Depends(get_current_user)):
+    customer = await db.customers.find_one({"id": customer_id}, {"_id": 0})
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    created_at = customer.get("created_at")
+    if isinstance(created_at, str):
+        created_at = datetime.fromisoformat(created_at)
+    
+    return CustomerResponse(
+        id=customer["id"],
+        name=customer["name"],
+        email=customer["email"],
+        phone=customer.get("phone"),
+        company=customer.get("company"),
+        address=customer.get("address"),
+        notes=customer.get("notes"),
+        created_at=created_at
+    )
+
+@api_router.delete("/customers/{customer_id}")
+async def delete_customer(customer_id: str, current_user: dict = Depends(get_current_user)):
+    result = await db.customers.delete_one({"id": customer_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return {"message": "Customer deleted"}
+
+# ==================== QUOTE ROUTES ====================
+
+async def generate_quote_number():
+    count = await db.quotes.count_documents({})
+    return f"QT-{count + 1001:05d}"
+
+@api_router.post("/quotes", response_model=QuoteResponse)
+async def create_quote(quote_data: QuoteCreate, current_user: dict = Depends(get_current_user)):
+    customer = await db.customers.find_one({"id": quote_data.customer_id}, {"_id": 0})
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    quote_id = str(uuid.uuid4())
+    quote_number = await generate_quote_number()
+    now = datetime.now(timezone.utc)
+    valid_until = now + timedelta(days=quote_data.valid_days)
+    
+    items = []
+    subtotal = 0
+    for item in quote_data.items:
+        line_total = item.quantity * item.unit_price
+        items.append({
+            "description": item.description,
+            "quantity": item.quantity,
+            "unit_price": item.unit_price,
+            "total": line_total
+        })
+        subtotal += line_total
+    
+    tax = round(subtotal * 0.10, 2)  # 10% GST for Australia
+    total = round(subtotal + tax, 2)
+    
+    public_link = f"{APP_URL}/portal/quote/{quote_id}"
+    
+    quote_doc = {
+        "id": quote_id,
+        "quote_number": quote_number,
+        "customer_id": quote_data.customer_id,
+        "customer_name": customer["name"],
+        "customer_email": customer["email"],
+        "title": quote_data.title,
+        "items": items,
+        "subtotal": subtotal,
+        "tax": tax,
+        "total": total,
+        "status": "draft",
+        "notes": quote_data.notes,
+        "valid_until": valid_until.isoformat(),
+        "public_link": public_link,
+        "created_by": current_user["id"],
+        "created_at": now.isoformat(),
+    }
+    
+    await db.quotes.insert_one(quote_doc)
+    
+    return QuoteResponse(
+        id=quote_id,
+        quote_number=quote_number,
+        customer_id=quote_data.customer_id,
+        customer_name=customer["name"],
+        customer_email=customer["email"],
+        title=quote_data.title,
+        items=items,
+        subtotal=subtotal,
+        tax=tax,
+        total=total,
+        status="draft",
+        notes=quote_data.notes,
+        valid_until=valid_until,
+        public_link=public_link,
+        created_at=now
+    )
+
+@api_router.get("/quotes", response_model=List[QuoteResponse])
+async def get_quotes(status: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    query = {}
+    if status:
+        query["status"] = status
+    
+    quotes = await db.quotes.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    
+    result = []
+    for q in quotes:
+        created_at = q.get("created_at")
+        valid_until = q.get("valid_until")
+        if isinstance(created_at, str):
+            created_at = datetime.fromisoformat(created_at)
+        if isinstance(valid_until, str):
+            valid_until = datetime.fromisoformat(valid_until)
+        
+        result.append(QuoteResponse(
+            id=q["id"],
+            quote_number=q["quote_number"],
+            customer_id=q["customer_id"],
+            customer_name=q["customer_name"],
+            customer_email=q["customer_email"],
+            title=q["title"],
+            items=q["items"],
+            subtotal=q["subtotal"],
+            tax=q["tax"],
+            total=q["total"],
+            status=q["status"],
+            notes=q.get("notes"),
+            valid_until=valid_until,
+            public_link=q["public_link"],
+            created_at=created_at
+        ))
+    return result
+
+@api_router.post("/quotes/{quote_id}/send")
+async def send_quote(quote_id: str, current_user: dict = Depends(get_current_user)):
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    # Update status to sent
+    await db.quotes.update_one({"id": quote_id}, {"$set": {"status": "sent"}})
+    
+    # Send email
+    html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2563eb;">Quote from {APP_NAME}</h2>
+        <p>Hi {quote['customer_name']},</p>
+        <p>You have received a new quote: <strong>{quote['title']}</strong></p>
+        <p><strong>Quote Number:</strong> {quote['quote_number']}</p>
+        <p><strong>Total:</strong> ${quote['total']:.2f} (incl. GST)</p>
+        <p><a href="{quote['public_link']}" style="display: inline-block; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px;">View Quote</a></p>
+        <p>This quote is valid until {quote['valid_until'][:10]}.</p>
+        <p>Thank you for your business!</p>
+    </div>
+    """
+    
+    await send_email(quote['customer_email'], f"Quote {quote['quote_number']} from {APP_NAME}", html)
+    
+    return {"message": "Quote sent successfully", "public_link": quote['public_link']}
+
+@api_router.delete("/quotes/{quote_id}")
+async def delete_quote(quote_id: str, current_user: dict = Depends(get_current_user)):
+    result = await db.quotes.delete_one({"id": quote_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    return {"message": "Quote deleted"}
+
+# ==================== INVOICE ROUTES ====================
+
+async def generate_invoice_number():
+    count = await db.invoices.count_documents({})
+    return f"INV-{count + 1001:05d}"
+
+@api_router.post("/invoices", response_model=InvoiceResponse)
+async def create_invoice(invoice_data: InvoiceCreate, request: Request, current_user: dict = Depends(get_current_user)):
+    customer = await db.customers.find_one({"id": invoice_data.customer_id}, {"_id": 0})
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    invoice_id = str(uuid.uuid4())
+    invoice_number = await generate_invoice_number()
+    now = datetime.now(timezone.utc)
+    due_date = now + timedelta(days=invoice_data.due_days)
+    
+    items = []
+    subtotal = 0
+    for item in invoice_data.items:
+        line_total = item.quantity * item.unit_price
+        items.append({
+            "description": item.description,
+            "quantity": item.quantity,
+            "unit_price": item.unit_price,
+            "total": line_total
+        })
+        subtotal += line_total
+    
+    tax = round(subtotal * 0.10, 2)
+    total = round(subtotal + tax, 2)
+    
+    public_link = f"{APP_URL}/portal/invoice/{invoice_id}"
+    
+    # Create Stripe payment link
+    payment_link = None
+    if STRIPE_API_KEY:
+        try:
+            host_url = str(request.base_url).rstrip("/")
+            webhook_url = f"{host_url}/api/webhook/stripe"
+            stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+            
+            success_url = f"{public_link}?paid=true"
+            cancel_url = f"{public_link}?cancelled=true"
+            
+            checkout_request = CheckoutSessionRequest(
+                amount=float(total),
+                currency="aud",
+                success_url=success_url,
+                cancel_url=cancel_url,
+                metadata={
+                    "invoice_id": invoice_id,
+                    "invoice_number": invoice_number,
+                    "customer_email": customer["email"]
+                }
+            )
+            
+            session = await stripe_checkout.create_checkout_session(checkout_request)
+            payment_link = session.url
+        except Exception as e:
+            logger.error(f"Stripe payment link error: {e}")
+    
+    invoice_doc = {
+        "id": invoice_id,
+        "invoice_number": invoice_number,
+        "customer_id": invoice_data.customer_id,
+        "customer_name": customer["name"],
+        "customer_email": customer["email"],
+        "quote_id": invoice_data.quote_id,
+        "title": invoice_data.title,
+        "items": items,
+        "subtotal": subtotal,
+        "tax": tax,
+        "total": total,
+        "status": "draft",
+        "notes": invoice_data.notes,
+        "due_date": due_date.isoformat(),
+        "paid_at": None,
+        "public_link": public_link,
+        "payment_link": payment_link,
+        "created_by": current_user["id"],
+        "created_at": now.isoformat(),
+    }
+    
+    await db.invoices.insert_one(invoice_doc)
+    
+    return InvoiceResponse(
+        id=invoice_id,
+        invoice_number=invoice_number,
+        customer_id=invoice_data.customer_id,
+        customer_name=customer["name"],
+        customer_email=customer["email"],
+        quote_id=invoice_data.quote_id,
+        title=invoice_data.title,
+        items=items,
+        subtotal=subtotal,
+        tax=tax,
+        total=total,
+        status="draft",
+        notes=invoice_data.notes,
+        due_date=due_date,
+        paid_at=None,
+        public_link=public_link,
+        payment_link=payment_link,
+        created_at=now
+    )
+
+@api_router.get("/invoices", response_model=List[InvoiceResponse])
+async def get_invoices(status: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    query = {}
+    if status:
+        query["status"] = status
+    
+    invoices = await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    
+    result = []
+    for inv in invoices:
+        created_at = inv.get("created_at")
+        due_date = inv.get("due_date")
+        paid_at = inv.get("paid_at")
+        
+        if isinstance(created_at, str):
+            created_at = datetime.fromisoformat(created_at)
+        if isinstance(due_date, str):
+            due_date = datetime.fromisoformat(due_date)
+        if isinstance(paid_at, str):
+            paid_at = datetime.fromisoformat(paid_at)
+        
+        result.append(InvoiceResponse(
+            id=inv["id"],
+            invoice_number=inv["invoice_number"],
+            customer_id=inv["customer_id"],
+            customer_name=inv["customer_name"],
+            customer_email=inv["customer_email"],
+            quote_id=inv.get("quote_id"),
+            title=inv["title"],
+            items=inv["items"],
+            subtotal=inv["subtotal"],
+            tax=inv["tax"],
+            total=inv["total"],
+            status=inv["status"],
+            notes=inv.get("notes"),
+            due_date=due_date,
+            paid_at=paid_at,
+            public_link=inv["public_link"],
+            payment_link=inv.get("payment_link"),
+            created_at=created_at
+        ))
+    return result
+
+@api_router.post("/invoices/{invoice_id}/send")
+async def send_invoice(invoice_id: str, current_user: dict = Depends(get_current_user)):
+    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    await db.invoices.update_one({"id": invoice_id}, {"$set": {"status": "sent"}})
+    
+    payment_btn = ""
+    if invoice.get("payment_link"):
+        payment_btn = f'<p><a href="{invoice["payment_link"]}" style="display: inline-block; padding: 12px 24px; background: #10b981; color: white; text-decoration: none; border-radius: 6px;">Pay Now</a></p>'
+    
+    html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2563eb;">Invoice from {APP_NAME}</h2>
+        <p>Hi {invoice['customer_name']},</p>
+        <p>You have received an invoice: <strong>{invoice['title']}</strong></p>
+        <p><strong>Invoice Number:</strong> {invoice['invoice_number']}</p>
+        <p><strong>Amount Due:</strong> ${invoice['total']:.2f} AUD (incl. GST)</p>
+        <p><strong>Due Date:</strong> {invoice['due_date'][:10]}</p>
+        {payment_btn}
+        <p><a href="{invoice['public_link']}" style="color: #2563eb;">View Invoice Details</a></p>
+        <p>Thank you for your business!</p>
+    </div>
+    """
+    
+    await send_email(invoice['customer_email'], f"Invoice {invoice['invoice_number']} from {APP_NAME}", html)
+    
+    return {"message": "Invoice sent successfully", "public_link": invoice['public_link']}
+
+@api_router.delete("/invoices/{invoice_id}")
+async def delete_invoice(invoice_id: str, current_user: dict = Depends(get_current_user)):
+    result = await db.invoices.delete_one({"id": invoice_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return {"message": "Invoice deleted"}
+
+# ==================== PUBLIC CUSTOMER PORTAL (No Auth) ====================
+
+@api_router.get("/portal/quote/{quote_id}")
+async def get_public_quote(quote_id: str):
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    return {
+        "quote_number": quote["quote_number"],
+        "customer_name": quote["customer_name"],
+        "title": quote["title"],
+        "items": quote["items"],
+        "subtotal": quote["subtotal"],
+        "tax": quote["tax"],
+        "total": quote["total"],
+        "status": quote["status"],
+        "notes": quote.get("notes"),
+        "valid_until": quote["valid_until"],
+    }
+
+@api_router.post("/portal/quote/{quote_id}/accept")
+async def accept_quote(quote_id: str):
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    await db.quotes.update_one({"id": quote_id}, {"$set": {"status": "accepted"}})
+    return {"message": "Quote accepted", "status": "accepted"}
+
+@api_router.post("/portal/quote/{quote_id}/decline")
+async def decline_quote(quote_id: str):
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    await db.quotes.update_one({"id": quote_id}, {"$set": {"status": "declined"}})
+    return {"message": "Quote declined", "status": "declined"}
+
+@api_router.get("/portal/invoice/{invoice_id}")
+async def get_public_invoice(invoice_id: str):
+    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    return {
+        "invoice_number": invoice["invoice_number"],
+        "customer_name": invoice["customer_name"],
+        "title": invoice["title"],
+        "items": invoice["items"],
+        "subtotal": invoice["subtotal"],
+        "tax": invoice["tax"],
+        "total": invoice["total"],
+        "status": invoice["status"],
+        "notes": invoice.get("notes"),
+        "due_date": invoice["due_date"],
+        "paid_at": invoice.get("paid_at"),
+        "payment_link": invoice.get("payment_link"),
+    }
+
+@api_router.get("/portal/customer/{customer_id}/jobs")
+async def get_customer_jobs(customer_id: str):
+    """Customer portal - view all jobs/tasks for a customer"""
+    tasks = await db.tasks.find({"customer_id": customer_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    quotes = await db.quotes.find({"customer_id": customer_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    invoices = await db.invoices.find({"customer_id": customer_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    
+    return {
+        "tasks": tasks,
+        "quotes": quotes,
+        "invoices": invoices
+    }
+
 # ==================== ROOT ROUTE ====================
 
 @api_router.get("/")
 async def root():
-    return {"message": "FieldOps Pro API", "version": "1.0.0"}
+    return {"message": "Field Force Solutions API", "version": "1.0.0"}
 
 # ==================== SUBSCRIPTION & PAYMENT ROUTES ====================
 
