@@ -69,7 +69,7 @@ export const RegisterPage = () => {
           <div className="h-14 w-14 bg-blue-600 rounded-xl flex items-center justify-center mb-4">
             <Zap className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 font-[Manrope]">FieldOps Solutions</h1>
+          <h1 className="text-3xl font-bold text-slate-900 font-[Manrope]">FieldOps</h1>
           <p className="text-slate-500 mt-1">Field Service Management</p>
         </div>
 

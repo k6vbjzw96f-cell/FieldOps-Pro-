@@ -90,7 +90,7 @@ export const QuotePortalPage = () => {
             <Zap className="h-6 w-6 text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900 font-[Manrope]">FieldOps Solutions</h1>
+            <h1 className="text-xl font-bold text-slate-900 font-[Manrope]">FieldOps</h1>
             <p className="text-sm text-slate-500">Quote {quote.quote_number}</p>
           </div>
         </div>

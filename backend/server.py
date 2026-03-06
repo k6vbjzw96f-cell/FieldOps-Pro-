@@ -46,7 +46,7 @@ SUBSCRIPTION_PLANS = {
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
-app = FastAPI(title="FieldOps Solutions API")
+app = FastAPI(title="FieldOps API")
 api_router = APIRouter(prefix="/api")
 
 # Configure logging
@@ -274,7 +274,7 @@ import resend
 
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 APP_URL = os.environ.get('APP_URL', 'https://fieldops-deploy.preview.emergentagent.com')
-APP_NAME = os.environ.get('APP_NAME', 'FieldOps Solutions')
+APP_NAME = os.environ.get('APP_NAME', 'FieldOps')
 
 async def send_email(to_email: str, subject: str, html_content: str):
     """Send email using Resend"""
@@ -1427,7 +1427,7 @@ async def get_customer_jobs(customer_id: str):
 
 @api_router.get("/")
 async def root():
-    return {"message": "FieldOps Solutions API", "version": "1.0.0"}
+    return {"message": "FieldOps API", "version": "1.0.0"}
 
 # ==================== SUBSCRIPTION & PAYMENT ROUTES ====================
 
