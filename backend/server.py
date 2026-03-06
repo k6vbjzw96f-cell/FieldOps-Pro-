@@ -13,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 import httpx
-from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
+import stripe
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1201,16 +1201,24 @@ async def create_invoice(invoice_data: InvoiceCreate, request: Request, current_
     payment_link = None
     if STRIPE_API_KEY:
         try:
-            host_url = str(request.base_url).rstrip("/")
-            webhook_url = f"{host_url}/api/webhook/stripe"
-            stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+            stripe.api_key = STRIPE_API_KEY
             
             success_url = f"{public_link}?paid=true"
             cancel_url = f"{public_link}?cancelled=true"
             
-            checkout_request = CheckoutSessionRequest(
-                amount=float(total),
-                currency="aud",
+            session = stripe.checkout.Session.create(
+                payment_method_types=["card"],
+                line_items=[{
+                    "price_data": {
+                        "currency": "aud",
+                        "product_data": {
+                            "name": f"Invoice {invoice_number}",
+                        },
+                        "unit_amount": int(float(total) * 100),
+                    },
+                    "quantity": 1,
+                }],
+                mode="payment",
                 success_url=success_url,
                 cancel_url=cancel_url,
                 metadata={
@@ -1219,8 +1227,6 @@ async def create_invoice(invoice_data: InvoiceCreate, request: Request, current_
                     "customer_email": customer["email"]
                 }
             )
-            
-            session = await stripe_checkout.create_checkout_session(checkout_request)
             payment_link = session.url
         except Exception as e:
             logger.error(f"Stripe payment link error: {e}")
@@ -1482,30 +1488,35 @@ async def create_checkout(request: Request, checkout_data: CheckoutRequest, curr
         raise HTTPException(status_code=400, detail="Free plan doesn't require payment")
     
     # Initialize Stripe
-    host_url = str(request.base_url).rstrip("/")
-    webhook_url = f"{host_url}/api/webhook/stripe"
-    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    stripe.api_key = STRIPE_API_KEY
     
     # Create success and cancel URLs
     success_url = f"{origin_url}/settings?session_id={{CHECKOUT_SESSION_ID}}&success=true"
     cancel_url = f"{origin_url}/settings?cancelled=true"
     
-    # Create checkout session
-    checkout_request = CheckoutSessionRequest(
-        amount=float(plan["price"]),
-        currency="usd",
-        success_url=success_url,
-        cancel_url=cancel_url,
-        metadata={
-            "user_id": current_user["id"],
-            "user_email": current_user["email"],
-            "plan_id": plan_id,
-            "plan_name": plan["name"]
-        }
-    )
-    
     try:
-        session: CheckoutSessionResponse = await stripe_checkout.create_checkout_session(checkout_request)
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {
+                        "name": f"{plan['name']} Plan",
+                    },
+                    "unit_amount": int(float(plan["price"]) * 100),
+                },
+                "quantity": 1,
+            }],
+            mode="payment",
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata={
+                "user_id": current_user["id"],
+                "user_email": current_user["email"],
+                "plan_id": plan_id,
+                "plan_name": plan["name"]
+            }
+        )
         
         # Create payment transaction record
         transaction_id = str(uuid.uuid4())
@@ -1513,7 +1524,7 @@ async def create_checkout(request: Request, checkout_data: CheckoutRequest, curr
         
         transaction_doc = {
             "id": transaction_id,
-            "session_id": session.session_id,
+            "session_id": session.id,
             "user_id": current_user["id"],
             "user_email": current_user["email"],
             "plan_id": plan_id,
@@ -1529,7 +1540,7 @@ async def create_checkout(request: Request, checkout_data: CheckoutRequest, curr
         
         return {
             "checkout_url": session.url,
-            "session_id": session.session_id
+            "session_id": session.id
         }
     except Exception as e:
         logger.error(f"Stripe checkout error: {e}")
@@ -1553,12 +1564,12 @@ async def get_checkout_status(session_id: str, request: Request, current_user: d
         }
     
     # Initialize Stripe
-    host_url = str(request.base_url).rstrip("/")
-    webhook_url = f"{host_url}/api/webhook/stripe"
-    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    stripe.api_key = STRIPE_API_KEY
     
     try:
-        status: CheckoutStatusResponse = await stripe_checkout.get_checkout_status(session_id)
+        checkout_session = stripe.checkout.Session.retrieve(session_id)
+        payment_status = "paid" if checkout_session.payment_status == "paid" else "unpaid"
+        session_status = checkout_session.status
         
         now = datetime.now(timezone.utc)
         
@@ -1566,14 +1577,14 @@ async def get_checkout_status(session_id: str, request: Request, current_user: d
         await db.payment_transactions.update_one(
             {"session_id": session_id},
             {"$set": {
-                "payment_status": status.payment_status,
-                "status": status.status,
+                "payment_status": payment_status,
+                "status": session_status,
                 "updated_at": now.isoformat()
             }}
         )
         
         # If payment successful, activate subscription
-        if status.payment_status == "paid":
+        if payment_status == "paid":
             plan_id = transaction["plan_id"]
             expires_at = now + timedelta(days=30)  # Monthly subscription
             
@@ -1599,8 +1610,8 @@ async def get_checkout_status(session_id: str, request: Request, current_user: d
             }
         
         return {
-            "status": status.status,
-            "payment_status": status.payment_status,
+            "status": session_status,
+            "payment_status": payment_status,
             "plan_id": transaction["plan_id"]
         }
     except Exception as e:
@@ -1614,47 +1625,52 @@ async def stripe_webhook(request: Request):
         body = await request.body()
         signature = request.headers.get("Stripe-Signature")
         
-        host_url = str(request.base_url).rstrip("/")
-        webhook_url = f"{host_url}/api/webhook/stripe"
-        stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+        stripe.api_key = STRIPE_API_KEY
         
-        webhook_response = await stripe_checkout.handle_webhook(body, signature)
+        # Parse the webhook event
+        event = stripe.Event.construct_from(
+            stripe.util.convert_to_dict(stripe.util.json.loads(body)),
+            stripe.api_key
+        )
         
-        if webhook_response.payment_status == "paid":
-            session_id = webhook_response.session_id
-            metadata = webhook_response.metadata
+        if event.type == "checkout.session.completed":
+            session = event.data.object
+            session_id = session.id
+            metadata = session.metadata
+            payment_status = session.payment_status
             
             now = datetime.now(timezone.utc)
             
-            # Update transaction
-            await db.payment_transactions.update_one(
-                {"session_id": session_id},
-                {"$set": {
-                    "payment_status": "paid",
-                    "status": "complete",
-                    "updated_at": now.isoformat()
-                }}
-            )
-            
-            # Activate subscription
-            user_id = metadata.get("user_id")
-            plan_id = metadata.get("plan_id")
-            
-            if user_id and plan_id:
-                expires_at = now + timedelta(days=30)
-                
-                await db.subscriptions.update_one(
-                    {"user_id": user_id},
+            if payment_status == "paid":
+                # Update transaction
+                await db.payment_transactions.update_one(
+                    {"session_id": session_id},
                     {"$set": {
-                        "user_id": user_id,
-                        "plan_id": plan_id,
-                        "status": "active",
-                        "activated_at": now.isoformat(),
-                        "expires_at": expires_at.isoformat(),
+                        "payment_status": "paid",
+                        "status": "complete",
                         "updated_at": now.isoformat()
-                    }},
-                    upsert=True
+                    }}
                 )
+                
+                # Activate subscription
+                user_id = metadata.get("user_id")
+                plan_id = metadata.get("plan_id")
+                
+                if user_id and plan_id:
+                    expires_at = now + timedelta(days=30)
+                    
+                    await db.subscriptions.update_one(
+                        {"user_id": user_id},
+                        {"$set": {
+                            "user_id": user_id,
+                            "plan_id": plan_id,
+                            "status": "active",
+                            "activated_at": now.isoformat(),
+                            "expires_at": expires_at.isoformat(),
+                            "updated_at": now.isoformat()
+                        }},
+                        upsert=True
+                    )
         
         return {"status": "ok"}
     except Exception as e:
