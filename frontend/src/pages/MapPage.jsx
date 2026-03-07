@@ -45,7 +45,7 @@ export const MapPage = () => {
   const [selectedMember, setSelectedMember] = useState(null);
   const [weather, setWeather] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [mapCenter, setMapCenter] = useState([40.7128, -74.006]);
+  const [mapCenter, setMapCenter] = useState([-33.8688, 151.2093]); // Sydney, Australia
 
   const fetchData = async () => {
     try {

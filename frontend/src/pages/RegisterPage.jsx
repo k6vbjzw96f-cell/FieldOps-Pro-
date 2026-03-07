@@ -133,7 +133,7 @@ export const RegisterPage = () => {
                     id="phone"
                     name="phone"
                     type="tel"
-                    placeholder="+1 (555) 123-4567"
+                    placeholder="+61 4XX XXX XXX"
                     value={formData.phone}
                     onChange={handleChange}
                     className="pl-10"

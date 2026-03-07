@@ -256,7 +256,7 @@ const TaskForm = ({ task, teamMembers, onSubmit, onCancel }) => {
             id="customer_phone"
             value={formData.customer_phone}
             onChange={(e) => setFormData({ ...formData, customer_phone: e.target.value })}
-            placeholder="+1 (555) 123-4567"
+            placeholder="+61 4XX XXX XXX"
             data-testid="task-phone-input"
           />
         </div>

@@ -145,7 +145,7 @@ export const SettingsPage = () => {
                       value={profile.phone}
                       onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
                       className="pl-10"
-                      placeholder="+1 (555) 123-4567"
+                      placeholder="+61 4XX XXX XXX"
                       data-testid="profile-phone-input"
                     />
                   </div>
